@@ -1,14 +1,13 @@
 import '../../domain/models/Station/station.dart';
 
 class StationDTO {
-  static const String idKey = 'id';
+  // These keys match the station fields stored in Firebase.
   static const String nameKey = 'name';
   static const String latKey = 'lat';
   static const String lngKey = 'lng';
   static const String slotsKey = 'slots';
 
   static Station fromJson(String id, Map<String, dynamic> json) {
-    assert(json[idKey] is String);
     assert(json[nameKey] is String);
     assert(json[latKey] is num);
     assert(json[lngKey] is num);
@@ -21,19 +20,21 @@ class StationDTO {
       lng: (json[lngKey] as num).toDouble(),
       slots: (json[slotsKey] as List)
           .map(
-            (slot) => BikeSlotDTO.fromJson(Map<String, dynamic>.from(slot as Map)),
+            (slot) =>
+                BikeSlotDTO.fromJson(Map<String, dynamic>.from(slot as Map)),
           )
           .toList(),
     );
   }
 
-  Map<String, dynamic> toJson(Station station) => {
-        idKey: station.id,
-        nameKey: station.name,
-        latKey: station.lat,
-        lngKey: station.lng,
-        slotsKey: station.slots.map((slot) => BikeSlotDTO().toJson(slot)).toList(),
-      };
+  static Map<String, dynamic> toJson(Station station) {
+    return {
+      nameKey: station.name,
+      latKey: station.lat,
+      lngKey: station.lng,
+      slotsKey: station.slots.map((slot) => BikeSlotDTO.toJson(slot)).toList(),
+    };
+  }
 }
 
 class BikeSlotDTO {
@@ -53,9 +54,11 @@ class BikeSlotDTO {
     );
   }
 
-  Map<String, dynamic> toJson(BikeSlot slot) => {
-        numberKey: slot.number,
-        bikeIdKey: slot.bikeId,
-        isOccupiedKey: slot.isOccupied,
-      };
+  static Map<String, dynamic> toJson(BikeSlot slot) {
+    return {
+      numberKey: slot.number,
+      bikeIdKey: slot.bikeId,
+      isOccupiedKey: slot.isOccupied,
+    };
+  }
 }

@@ -1,4 +1,4 @@
-import '../models/Booking/booking.dart';
+import '../../../domain/models/Booking/booking.dart';
 
 abstract class BookingRepository {
   Future<bool> createBooking({
@@ -11,5 +11,4 @@ abstract class BookingRepository {
   Future<Booking?> getActiveBooking(String userId);
 
   Future<void> endBooking(String bookingId);
-
 }
