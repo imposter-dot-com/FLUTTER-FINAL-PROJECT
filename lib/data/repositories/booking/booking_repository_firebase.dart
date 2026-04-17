@@ -17,10 +17,8 @@ class BookingRepositoryFirebase implements BookingRepository {
     required int slotNumber,
     required String bikeId,
   }) async {
-    final stationPathId = _normalizeStationPathId(stationId);
-
     final _ResolvedSlot? resolvedSlot = await _resolveSlotByNumber(
-      stationPathId: stationPathId,
+      stationPathId: stationId,
       slotNumber: slotNumber,
     );
 
@@ -28,7 +26,7 @@ class BookingRepositoryFirebase implements BookingRepository {
       throw Exception('Failed to verify slot availability');
     }
 
-    // In this data model, isOccupied=true means there is a bike in this slot.
+    // In this data model, isOccupied=true means there is a bike in this slot
     final bool hasBike =
         resolvedSlot.data['isOccupied'] == true &&
         resolvedSlot.data['bikeId'] != null;
@@ -36,10 +34,10 @@ class BookingRepositoryFirebase implements BookingRepository {
       throw Exception('This bike slot is already taken');
     }
 
-    // Fetch station name for the booking record.
+    // fetch station name for the booking record
     final stationUri = Uri.https(
       FirebaseConstants.databaseBaseUrl,
-      '/stations/$stationPathId/name.json',
+      '/stations/$stationId/name.json',
     );
     final stationResponse = await http.get(stationUri);
     final stationName = stationResponse.statusCode == 200
@@ -66,8 +64,8 @@ class BookingRepositoryFirebase implements BookingRepository {
 
     final payload = {
       'users/$userId/currentBooking': bookingData,
-      'stations/$stationPathId/slots/${resolvedSlot.index}/isOccupied': false,
-      'stations/$stationPathId/slots/${resolvedSlot.index}/bikeId': null,
+      'stations/$stationId/slots/${resolvedSlot.index}/isOccupied': false,
+      'stations/$stationId/slots/${resolvedSlot.index}/bikeId': null,
     };
 
     final patchResponse = await http.patch(
@@ -95,7 +93,7 @@ class BookingRepositoryFirebase implements BookingRepository {
 
   @override
   Future<Booking?> getActiveBooking(String userId) async {
-    // Return cache if it's for the same user.
+    // Return cache if it's for the same user
     if (_cachedUserId == userId && _cachedBooking != null) {
       return _cachedBooking;
     }
@@ -123,13 +121,6 @@ class BookingRepositoryFirebase implements BookingRepository {
     _cachedBooking = booking;
 
     return booking;
-  }
-
-  String _normalizeStationPathId(String stationId) {
-    if (stationId.startsWith('station_')) {
-      return stationId.split('_').last;
-    }
-    return stationId;
   }
 
   Future<_ResolvedSlot?> _resolveSlotByNumber({

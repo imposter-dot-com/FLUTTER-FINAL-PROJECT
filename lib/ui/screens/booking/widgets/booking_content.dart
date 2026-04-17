@@ -9,25 +9,21 @@ import 'package:bike_renting_app/ui/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-class BookingContent extends StatefulWidget {
+class BookingContent extends StatelessWidget {
   const BookingContent({super.key});
-
-  @override
-  State<BookingContent> createState() => _BookingContentState();
-}
-
-class _BookingContentState extends State<BookingContent> {
-  bool _isShowingSuccessDialog = false;
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<BookingViewModel>();
-    final availableSlots =
-        vm.station.slots.where((s) => s.isOccupied && s.bikeId != null).toList();
+    final availableSlots = vm.station.slots
+        .where((s) => s.isOccupied && s.bikeId != null)
+        .toList();
 
     // Handle errors
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (vm.errorMessage != null) {
+    if (vm.errorMessage != null && !vm.errorHandled) {
+      vm.markErrorHandled();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(vm.errorMessage!),
@@ -39,10 +35,13 @@ class _BookingContentState extends State<BookingContent> {
             ),
           ),
         );
-      }
+      });
+    }
 
-      if (vm.isSuccess && !_isShowingSuccessDialog) {
-        _isShowingSuccessDialog = true;
+    if (vm.isSuccess && !vm.successHandled) {
+      vm.markSuccessHandled();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
         showDialog<void>(
           context: context,
           barrierDismissible: false,
@@ -52,12 +51,11 @@ class _BookingContentState extends State<BookingContent> {
             },
           ),
         ).then((_) {
-          if (!mounted) return;
-          _isShowingSuccessDialog = false;
+          if (!context.mounted) return;
           vm.clearError();
         });
-      }
-    });
+      });
+    }
 
     return Scaffold(
       backgroundColor: BikeAppColors.background,
@@ -82,12 +80,12 @@ class _BookingContentState extends State<BookingContent> {
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: availableSlots.length,
-                    separatorBuilder:
-                        (context, index) => const SizedBox(height: 12),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final s = availableSlots[index];
 
-                      // Check selection against the ViewModel's state.
+                      // check selection against the vm's state 
                       final isSelected = vm.selectedSlot?.number == s.number;
 
                       return SlotCard(
@@ -146,8 +144,8 @@ class _BookingContentState extends State<BookingContent> {
                 color: BikeAppColors.tertiary,
               ),
               const SizedBox(width: 4),
-              const Text(
-                'St. 6A, Phnom Penh',
+              Text(
+                vm.address,
                 style: TextStyle(fontSize: 12, color: BikeAppColors.tertiary),
               ),
               const SizedBox(width: 8),

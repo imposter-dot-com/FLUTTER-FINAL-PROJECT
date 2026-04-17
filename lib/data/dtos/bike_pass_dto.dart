@@ -18,9 +18,9 @@ class BikePassDTO {
     );
   }
 
-  Map<String, dynamic> toJson(BikePass pass) => {
-        idKey: pass.id,
-        typeKey: pass.type.name,
-        expiryKey: pass.expiryDate.toIso8601String(),
-      };
+  static Map<String, dynamic> toJson(BikePass pass) => {
+    idKey: pass.id,
+    typeKey: pass.type.name,
+    expiryKey: pass.expiryDate.toIso8601String(),
+  };
 }

@@ -13,7 +13,10 @@ class StationRepositoryFirebase implements StationRepository {
   List<Station>? _cachedStations;
 
   // This endpoint returns the station list stored in Firebase.
-  final Uri stationsUri = Uri.https(FirebaseConstants.databaseBaseUrl, '/stations.json');
+  final Uri stationsUri = Uri.https(
+    FirebaseConstants.databaseBaseUrl,
+    '/stations.json',
+  );
 
   @override
   Future<List<Station>> getAllStations() async {
@@ -63,14 +66,15 @@ class StationRepositoryFirebase implements StationRepository {
     }
 
     // Firebase returns a JSON array of station objects.
-    final List<dynamic> stationJson = json.decode(response.body) as List<dynamic>;
+    final List<dynamic> stationJson =
+        json.decode(response.body) as List<dynamic>;
     final List<Station> stations = [];
 
-    // The station objects do not include their own id, so one is generated here.
+    // Firebase stores stations in a JSON array, so use the raw array index as id.
     for (int index = 0; index < stationJson.length; index++) {
       stations.add(
         StationDTO.fromJson(
-          'station_$index',
+          '$index',
           Map<String, dynamic>.from(stationJson[index] as Map),
         ),
       );
