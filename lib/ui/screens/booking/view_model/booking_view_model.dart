@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../../data/repositories/bike_pass/bike_pass_repository.dart';
-import '../../../../data/repositories/booking/booking_repository.dart';
-import '../../../../domain/models/Pass/bike_pass.dart';
-import '../../../../domain/models/Station/station.dart';
-import '../../utils/async_value.dart';
+import '../../../../../data/repositories/bike_pass/bike_pass_repository.dart';
+import '../../../../../data/repositories/booking/booking_repository.dart';
+import '../../../../../domain/models/Pass/bike_pass.dart';
+import '../../../../../domain/models/Station/station.dart';
+import '../../../utils/async_value.dart';
 
 enum BookingFlow { hasPass, noPass }
 
@@ -13,7 +13,9 @@ class BookingViewModel extends ChangeNotifier{
   final BookingRepository bookingRepository;
   final String userId;
   final Station station;
-  final BikeSlot slot;
+  final void Function(String stationId, int slotNumber)? onBookingSuccess;
+  BikeSlot? _selectedSlot;
+
 
   BikePass? activePass;
   AsyncValue<bool> bookingState = AsyncValue.success(false);
@@ -23,11 +25,13 @@ class BookingViewModel extends ChangeNotifier{
     required this.bookingRepository,
     required this.userId,
     required this.station,
-    required this.slot,
-  }) {
+    this.onBookingSuccess,
+    BikeSlot? initialSlot,
+  }) : _selectedSlot = initialSlot {
     _loadActivePass();
   }
 
+  BikeSlot? get selectedSlot => _selectedSlot;
   BookingFlow get flow => (activePass != null && activePass!.isValid) ? BookingFlow.hasPass : BookingFlow.noPass;
 
   bool get isLoading => bookingState.state == AsyncValueState.loading;
@@ -44,34 +48,52 @@ class BookingViewModel extends ChangeNotifier{
     }
   }
 
+  void selectSlot(BikeSlot slot){
+    if(_selectedSlot?.number == slot.number) return;
+    _selectedSlot = slot;
+    notifyListeners();
+  }
+
   Future<void> confirmBooking() async{
+    if(_selectedSlot == null) return;
+
     bookingState = AsyncValue.loading();
     notifyListeners();
 
     try{
-      final bool success = await bookingRepository.createBooking(userId: userId, stationId: station.id, slotNumber: slot.number, bikeId: slot.bikeId ?? '');
+      final bool success = await bookingRepository.createBooking(
+        userId: userId,
+        stationId: station.id,
+        slotNumber: _selectedSlot!.number,
+        bikeId: _selectedSlot!.bikeId ?? '',
+      );
+      if (success) {
+        onBookingSuccess?.call(station.id, _selectedSlot!.number);
+      }
       bookingState = AsyncValue.success(success);
     } catch (e) {
       bookingState = AsyncValue.error(e);
     }
-
     notifyListeners();
   }
 
   Future<void> purchaseSingleTicketAndBook() async{
+    if(_selectedSlot == null) return;
+
     bookingState = AsyncValue.loading();
     notifyListeners();
 
     try{
       await bikePassRepository.purchasePass(userId, PassType.single);
       activePass = await bikePassRepository.getUserActivePass(userId);
-
-      final bool success = await bookingRepository.createBooking(userId: userId, stationId: station.id, slotNumber: slot.number, bikeId: slot.bikeId ?? '',);
+      final bool success = await bookingRepository.createBooking(userId: userId, stationId: station.id, slotNumber: _selectedSlot!.number, bikeId: _selectedSlot!.bikeId ?? '',);
+      if (success) {
+        onBookingSuccess?.call(station.id, _selectedSlot!.number);
+      }
       bookingState = AsyncValue.success(success);
     }catch(e){
       bookingState = AsyncValue.error(e);
     }
-
     notifyListeners();
   }
 

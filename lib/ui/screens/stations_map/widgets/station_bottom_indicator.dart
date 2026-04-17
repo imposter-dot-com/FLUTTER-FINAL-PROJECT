@@ -22,7 +22,7 @@ class StationBottomIndicator extends StatelessWidget {
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           for (int index = 0; index < 5; index++)
             if (index == 2)
