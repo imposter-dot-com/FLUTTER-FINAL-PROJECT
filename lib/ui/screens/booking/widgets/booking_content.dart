@@ -22,8 +22,10 @@ class _BookingContentState extends State<BookingContent> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<BookingViewModel>();
+    final availableSlots =
+        vm.station.slots.where((s) => s.isOccupied && s.bikeId != null).toList();
 
-    // Handle errors.
+    // Handle errors
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (vm.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -70,26 +72,33 @@ class _BookingContentState extends State<BookingContent> {
           _buildStationHeader(vm, context),
           const Divider(height: 1),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: vm.station.slots.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final s = vm.station.slots[index];
+            child: availableSlots.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No available bikes right now.',
+                      style: TextStyle(color: BikeAppColors.tertiary),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: availableSlots.length,
+                    separatorBuilder:
+                        (context, index) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final s = availableSlots[index];
 
-                // FIX: Check selection against the ViewModel's state
-                final isSelected = vm.selectedSlot?.number == s.number;
-                final available = s.isOccupied && s.bikeId != null;
+                      // Check selection against the ViewModel's state.
+                      final isSelected = vm.selectedSlot?.number == s.number;
 
-                return SlotCard(
-                  slot: s,
-                  isSelected: isSelected,
-                  available: available,
-                  isLoading: vm.isLoading && isSelected,
-                  onBook: available ? () => _onBookTap(context, vm, s) : null,
-                );
-              },
-            ),
+                      return SlotCard(
+                        slot: s,
+                        isSelected: isSelected,
+                        available: true,
+                        isLoading: vm.isLoading && isSelected,
+                        onBook: () => _onBookTap(context, vm, s),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
