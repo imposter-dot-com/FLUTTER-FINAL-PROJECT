@@ -9,6 +9,5 @@ abstract class BookingRepository {
   });
 
   Future<Booking?> getActiveBooking(String userId);
-
-  Future<void> endBooking(String bookingId);
+  
 }

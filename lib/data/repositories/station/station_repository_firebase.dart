@@ -6,16 +6,14 @@ import 'package:http/http.dart' as http;
 import '../../../domain/models/Station/station.dart';
 import '../../dtos/station_dto.dart';
 import 'station_repository.dart';
+import '../../../remote/firebase_constants.dart';
 
 class StationRepositoryFirebase implements StationRepository {
   // Keep the last station list so the app does not refetch on every rebuild.
   List<Station>? _cachedStations;
 
   // This endpoint returns the station list stored in Firebase.
-  final Uri stationsUri = Uri.https(
-    'velo-final-project-default-rtdb.asia-southeast1.firebasedatabase.app',
-    '/stations.json',
-  );
+  final Uri stationsUri = Uri.https(FirebaseConstants.databaseBaseUrl, '/stations.json');
 
   @override
   Future<List<Station>> getAllStations() async {

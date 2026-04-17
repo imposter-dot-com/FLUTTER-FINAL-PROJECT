@@ -78,6 +78,44 @@ class StationsMapViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void applyLocalBookingUpdate({
+    required String stationId,
+    required int slotNumber,
+  }) {
+    final List<Station>? stations = stationsValue.data;
+    if (stations == null) return;
+
+    final List<Station> updatedStations = stations.map((station) {
+      if (station.id != stationId) return station;
+
+      final List<BikeSlot> updatedSlots = station.slots.map((slot) {
+        if (slot.number != slotNumber) return slot;
+
+        return BikeSlot(
+          number: slot.number,
+          bikeId: null,
+          isOccupied: false,
+        );
+      }).toList();
+
+      return Station(
+        id: station.id,
+        name: station.name,
+        lat: station.lat,
+        lng: station.lng,
+        slots: updatedSlots,
+      );
+    }).toList();
+
+    stationsValue = AsyncValue.success(updatedStations);
+    if (selectedStation?.id == stationId) {
+      selectedStation = updatedStations.firstWhere(
+        (station) => station.id == stationId,
+      );
+    }
+    notifyListeners();
+  }
+
   // Search submit uses the first station from the filtered list.
   Station? selectFirstFilteredStation() {
     if (filteredStations.isEmpty) {
