@@ -23,11 +23,11 @@ class BookingDTO {
     );
   }
 
-  Map<String, dynamic> toJson(Booking booking) => {
-        idKey: booking.id,
-        stationNameKey: booking.stationName,
-        slotNumberKey: booking.slotNumber,
-        bookingTimeKey: booking.bookingTime.toIso8601String(),
-        bikeIdKey: booking.bikeId,
-      };
+  static Map<String, dynamic> toJson(Booking booking) => {
+    idKey: booking.id,
+    stationNameKey: booking.stationName,
+    slotNumberKey: booking.slotNumber,
+    bookingTimeKey: booking.bookingTime.toIso8601String(),
+    bikeIdKey: booking.bikeId,
+  };
 }

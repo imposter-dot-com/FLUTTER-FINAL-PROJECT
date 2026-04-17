@@ -47,14 +47,14 @@ class BikePassRepositoryFirebase implements BikePassRepository {
     final passId = 'pass_${DateTime.now().millisecondsSinceEpoch}';
 
     final expiry = switch (type) {
-      PassType.single  => DateTime.now().add(const Duration(hours: 2)),
-      PassType.day     => DateTime.now().add(const Duration(days: 1)),
+      PassType.single => DateTime.now().add(const Duration(hours: 2)),
+      PassType.day => DateTime.now().add(const Duration(days: 1)),
       PassType.monthly => DateTime.now().add(const Duration(days: 30)),
-      PassType.annual  => DateTime.now().add(const Duration(days: 365)),
+      PassType.annual => DateTime.now().add(const Duration(days: 365)),
     };
 
     final pass = BikePass(id: passId, type: type, expiryDate: expiry);
-    final dto = BikePassDTO().toJson(pass);
+    final dto = BikePassDTO.toJson(pass);
 
     final uri = Uri.https(
       FirebaseConstants.databaseBaseUrl,
@@ -70,7 +70,7 @@ class BikePassRepositoryFirebase implements BikePassRepository {
       throw Exception('Failed to purchase pass: ${response.body}');
     }
 
-    // update cache immediately so next read doesn't need a network call.
+    // update cache immediately so next read doesn't need a network call
     _cachedUserId = userId;
     _cachedPass = pass;
   }
