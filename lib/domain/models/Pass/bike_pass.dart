@@ -1,4 +1,4 @@
-enum PassType { day, monthly, annual }
+enum PassType { day, monthly, annual, single }
 
 class BikePass {
   final String id;

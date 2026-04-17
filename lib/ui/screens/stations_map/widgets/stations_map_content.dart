@@ -1,3 +1,5 @@
+import 'package:bike_renting_app/main.dart';
+import 'package:bike_renting_app/ui/screens/booking/booking_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -100,6 +102,21 @@ class _StationsMapContentState extends State<StationsMapContent> {
             // Save the selected station and move the camera to it.
             viewModel.selectStation(station);
             _focusStation(station);
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => BookingScreen(
+                  userId: currentUserId,
+                  station: station,
+                  slot: station.slots.first,
+                  onBookingSuccess: (stationId, slotNumber) {
+                    viewModel.applyLocalBookingUpdate(
+                      stationId: stationId,
+                      slotNumber: slotNumber,
+                    );
+                  },
+                ),
+              ),
+            );
           },
           child: _buildMarker(station),
         ),
