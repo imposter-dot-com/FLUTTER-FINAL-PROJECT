@@ -25,6 +25,7 @@ class _StationsMapContentState extends State<StationsMapContent> {
 
   // Used for search focus and marker taps that should move the visible map.
   final MapController _mapController = MapController();
+  final TextEditingController _searchController = TextEditingController();
   // Reuse marker widgets when station data has not changed.
   final Map<String, _CachedMarker> _markerCache = <String, _CachedMarker>{};
 
@@ -127,15 +128,22 @@ class _StationsMapContentState extends State<StationsMapContent> {
                         children: [
                           // Search updates the filtered station list and can recenter the map.
                           StationSearchBar(
-                            controller: context
+                            controller: _searchController,
+                            onChanged: context
                                 .read<StationsMapViewModel>()
-                                .searchController,
+                                .updateSearchQuery,
                             onSubmitted: () {
                               final Station? station = context
                                   .read<StationsMapViewModel>()
                                   .selectFirstFilteredStation();
 
                               if (station != null) {
+                                _searchController.value = TextEditingValue(
+                                  text: station.name,
+                                  selection: TextSelection.collapsed(
+                                    offset: station.name.length,
+                                  ),
+                                );
                                 FocusScope.of(context).unfocus();
                                 _focusStation(station);
                               }
@@ -146,6 +154,12 @@ class _StationsMapContentState extends State<StationsMapContent> {
                           ),
                           _SearchSuggestionsPanel(
                             onStationSelected: (station) {
+                              _searchController.value = TextEditingValue(
+                                text: station.name,
+                                selection: TextSelection.collapsed(
+                                  offset: station.name.length,
+                                ),
+                              );
                               context
                                   .read<StationsMapViewModel>()
                                   .selectSearchSuggestion(station);
@@ -165,6 +179,12 @@ class _StationsMapContentState extends State<StationsMapContent> {
         }
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }
 
