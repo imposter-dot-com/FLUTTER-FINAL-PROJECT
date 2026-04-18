@@ -7,28 +7,40 @@ class StationBottomIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
-      decoration: BoxDecoration(
-        color: BikeAppColors.secondary,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 18,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      height: 102,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
         children: [
-          for (int index = 0; index < 5; index++)
-            if (index == 2)
-              Container(
-                width: 54,
-                height: 54,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              height: 54,
+              decoration: BoxDecoration(
+                color: BikeAppColors.secondary,
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 10,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                width: 88,
+                height: 88,
                 decoration: const BoxDecoration(
                   color: BikeAppColors.primary,
                   shape: BoxShape.circle,
@@ -36,18 +48,11 @@ class StationBottomIndicator extends StatelessWidget {
                 child: const Icon(
                   Icons.map,
                   color: Colors.white,
-                  size: 28,
-                ),
-              )
-            else
-              Container(
-                width: 18,
-                height: 18,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF9E9E9E),
-                  shape: BoxShape.circle,
+                  size: 46,
                 ),
               ),
+            ),
+          ),
         ],
       ),
     );
