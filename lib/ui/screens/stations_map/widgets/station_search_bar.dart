@@ -4,13 +4,11 @@ class StationSearchBar extends StatelessWidget {
   const StationSearchBar({
     super.key,
     required this.controller,
-    required this.onChanged,
     required this.onSubmitted,
     required this.onMenuTap,
   });
 
   final TextEditingController controller;
-  final ValueChanged<String> onChanged;
   final VoidCallback onSubmitted;
   final VoidCallback onMenuTap;
 
@@ -26,7 +24,6 @@ class StationSearchBar extends StatelessWidget {
             color: Colors.white,
             child: TextField(
               controller: controller,
-              onChanged: onChanged,
               onSubmitted: (_) => onSubmitted(),
               decoration: const InputDecoration(
                 hintText: 'Search station',

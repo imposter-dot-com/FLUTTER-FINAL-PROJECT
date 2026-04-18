@@ -10,7 +10,7 @@ class StationsMapScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Create the screen state object here and pass it to the map content.
+    // The map screen gets all station state through this view model.
     return ChangeNotifierProvider(
       create: (context) => StationsMapViewModel(
         stationRepository: context.read<StationRepository>(),
