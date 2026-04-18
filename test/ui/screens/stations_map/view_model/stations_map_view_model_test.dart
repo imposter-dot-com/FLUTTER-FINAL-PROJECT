@@ -60,7 +60,7 @@ void main() {
     );
 
     test(
-      'selecting a search suggestion updates the query and selection',
+      'selecting a search suggestion updates the derived query and selection',
       () async {
         final viewModel = StationsMapViewModel(stationRepository: repository);
 
@@ -70,7 +70,7 @@ void main() {
         viewModel.selectSearchSuggestion(_stations.last);
 
         expect(viewModel.selectedStation?.id, '2');
-        expect(viewModel.searchController.text, 'Riverfront Hub');
+        expect(viewModel.searchQuery, 'riverfront hub');
         expect(viewModel.filteredStations.map((station) => station.id), ['2']);
 
         viewModel.dispose();

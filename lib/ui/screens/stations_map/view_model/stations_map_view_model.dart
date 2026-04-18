@@ -9,34 +9,33 @@ import '../../../utils/async_value.dart';
 class StationsMapViewModel extends ChangeNotifier {
   final StationRepository stationRepository;
 
-  final TextEditingController searchController = TextEditingController();
-
   AsyncValue<List<Station>> _stationsValue = AsyncValue.loading();
-  Station? _selectedStation;
-  List<Station> _filteredStations = const <Station>[];
+  String? _selectedStationId;
   StreamSubscription<List<Station>>? _stationsSubscription;
   String _searchQuery = '';
 
   StationsMapViewModel({required this.stationRepository}) {
-    searchController.addListener(_handleSearchChanged);
     // Start listening as soon as the screen state is created.
     _subscribeToStations();
   }
 
   AsyncValue<List<Station>> get stationsValue => _stationsValue;
-  Station? get selectedStation => _selectedStation;
-  List<Station> get filteredStations => _filteredStations;
+  List<Station> get stations => _stationsValue.data ?? const <Station>[];
+  String get searchQuery => _searchQuery;
+  Station? get selectedStation =>
+      _findStationById(_selectedStationId, stations);
+  List<Station> get filteredStations => _filterStations(stations, _searchQuery);
   bool get hasSearchQuery => _searchQuery.isNotEmpty;
   bool get showSearchSuggestions => hasSearchQuery;
   List<Station> get searchSuggestions =>
-      List<Station>.unmodifiable(_filteredStations.take(5));
+      List<Station>.unmodifiable(filteredStations.take(5));
 
   String get searchResultsLabel {
-    if (_filteredStations.isEmpty) {
+    if (filteredStations.isEmpty) {
       return 'No stations match your search';
     }
 
-    return '${_filteredStations.length} station(s) found';
+    return '${filteredStations.length} station(s) found';
   }
 
   String get errorTitle => 'Unable to load stations';
@@ -62,48 +61,31 @@ class StationsMapViewModel extends ChangeNotifier {
     }
 
     _searchQuery = nextQuery;
-    _filteredStations = _filterStations(
-      _stationsValue.data ?? const <Station>[],
-    );
     notifyListeners();
   }
 
   void selectStation(Station station) {
-    if (_selectedStation == station) {
+    if (_selectedStationId == station.id) {
       return;
     }
 
-    _selectedStation = station;
+    _selectedStationId = station.id;
     notifyListeners();
   }
 
   Station? selectFirstFilteredStation() {
-    if (_filteredStations.isEmpty) {
+    if (filteredStations.isEmpty) {
       return null;
     }
 
-    final Station station = _filteredStations.first;
+    final Station station = filteredStations.first;
     selectSearchSuggestion(station);
     return station;
   }
 
   void selectSearchSuggestion(Station station) {
-    final String searchText = station.name;
-    final String nextQuery = searchText.trim().toLowerCase();
-
-    _searchQuery = nextQuery;
-    _selectedStation = station;
-    _filteredStations = _filterStations(
-      _stationsValue.data ?? const <Station>[],
-    );
-
-    if (searchController.text != searchText) {
-      searchController.value = TextEditingValue(
-        text: searchText,
-        selection: TextSelection.collapsed(offset: searchText.length),
-      );
-    }
-
+    _searchQuery = station.name.trim().toLowerCase();
+    _selectedStationId = station.id;
     notifyListeners();
   }
 
@@ -118,29 +100,23 @@ class StationsMapViewModel extends ChangeNotifier {
     }
 
     await _stationsSubscription?.cancel();
-    // Repository emits station snapshots; this keeps the map reactive.
     _stationsSubscription = stationRepository.watchStations().listen(
+      // wehave Data callback (success case and the error handler
       _handleStationsUpdated,
       onError: _handleStationsError,
     );
   }
 
   void _handleStationsUpdated(List<Station> stations) {
+    // w make station immutable to prevent accidentaly write by ui or cache
     final List<Station> nextStations = List<Station>.unmodifiable(stations);
-    final Station? nextSelectedStation = _resolveSelectedStation(nextStations);
-    // Filtering is always derived from the latest station snapshot plus the search query.
-    final List<Station> nextFilteredStations = _filterStations(nextStations);
 
     if (_stationsValue.state == AsyncValueState.success &&
-        _stationsListEquals(_stationsValue.data, nextStations) &&
-        _selectedStation == nextSelectedStation &&
-        _stationsListEquals(_filteredStations, nextFilteredStations)) {
+        _stationsListEquals(_stationsValue.data, nextStations)) {
       return;
     }
 
     _stationsValue = AsyncValue.success(nextStations);
-    _selectedStation = nextSelectedStation;
-    _filteredStations = nextFilteredStations;
     notifyListeners();
   }
 
@@ -149,18 +125,13 @@ class StationsMapViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _handleSearchChanged() {
-    updateSearchQuery(searchController.text);
-  }
-
-  Station? _resolveSelectedStation(List<Station> stations) {
-    final Station? currentSelectedStation = _selectedStation;
-    if (currentSelectedStation == null) {
+  Station? _findStationById(String? stationId, List<Station> stations) {
+    if (stationId == null) {
       return null;
     }
 
     for (final Station station in stations) {
-      if (station.id == currentSelectedStation.id) {
+      if (station.id == stationId) {
         return station;
       }
     }
@@ -168,23 +139,21 @@ class StationsMapViewModel extends ChangeNotifier {
     return null;
   }
 
-  List<Station> _filterStations(List<Station> stations) {
-    if (_searchQuery.isEmpty) {
+  List<Station> _filterStations(List<Station> stations, String query) {
+    if (query.isEmpty) {
       return stations;
     }
 
     return List<Station>.unmodifiable(
       stations
-          .where((station) => station.name.toLowerCase().contains(_searchQuery))
+          .where((station) => station.name.toLowerCase().contains(query))
           .toList(growable: false),
     );
   }
 
   @override
   void dispose() {
-    searchController.removeListener(_handleSearchChanged);
     _stationsSubscription?.cancel();
-    searchController.dispose();
     super.dispose();
   }
 }
