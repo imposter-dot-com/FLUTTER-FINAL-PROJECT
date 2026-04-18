@@ -1,5 +1,7 @@
 import 'package:bike_renting_app/main.dart';
 import 'package:bike_renting_app/ui/screens/booking/booking_screen.dart';
+import 'package:bike_renting_app/ui/screens/current_booking/view_model/current_booking_view_model.dart';
+import 'package:bike_renting_app/ui/screens/current_booking/widgets/current_booking_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -29,30 +31,25 @@ class _StationsMapContentState extends State<StationsMapContent> {
 
   void _focusStation(Station station) {
     // When the user selects a station, jump the map closer to that station.
-    _mapController.move(
-      LatLng(station.lat, station.lng),
-      16,
-    );
+    _mapController.move(LatLng(station.lat, station.lng), 16);
   }
 
   Widget _buildMarker(Station station) {
     // Available stations use orange. Empty stations use gray.
     final bool hasBikes = station.availableBikesCount > 0;
-    final Color pinColor =
-        hasBikes ? BikeAppColors.primary : const Color(0xFF7F7F7F);
-    final Color numberColor =
-        hasBikes ? BikeAppColors.primary : const Color(0xFF7F7F7F);
+    final Color pinColor = hasBikes
+        ? BikeAppColors.primary
+        : const Color(0xFF7F7F7F);
+    final Color numberColor = hasBikes
+        ? BikeAppColors.primary
+        : const Color(0xFF7F7F7F);
 
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.topCenter,
       children: [
         // The outer pin gives the location shape.
-        Icon(
-          Icons.location_pin,
-          color: pinColor,
-          size: 62,
-        ),
+        Icon(Icons.location_pin, color: pinColor, size: 62),
         Positioned(
           top: 11,
           child: Container(
@@ -113,6 +110,9 @@ class _StationsMapContentState extends State<StationsMapContent> {
                       stationId: stationId,
                       slotNumber: slotNumber,
                     );
+                    context
+                        .read<CurrentBookingViewModel>()
+                        .onNewBookingCreated();
                   },
                 ),
               ),
@@ -126,13 +126,12 @@ class _StationsMapContentState extends State<StationsMapContent> {
 
   @override
   Widget build(BuildContext context) {
-    final StationsMapViewModel viewModel = context.watch<StationsMapViewModel>();
+    final StationsMapViewModel viewModel = context
+        .watch<StationsMapViewModel>();
 
     switch (viewModel.stationsValue.state) {
       case AsyncValueState.loading:
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
       case AsyncValueState.error:
         return Scaffold(
@@ -161,7 +160,8 @@ class _StationsMapContentState extends State<StationsMapContent> {
                 children: [
                   TileLayer(
                     // OpenStreetMap tiles draw the base map.
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.bike_renting_app',
                   ),
                   MarkerLayer(
@@ -180,8 +180,8 @@ class _StationsMapContentState extends State<StationsMapContent> {
                         onChanged: viewModel.updateSearchQuery,
                         onSubmitted: () {
                           // Search submit focuses the first visible result.
-                          final Station? station =
-                              viewModel.selectFirstFilteredStation();
+                          final Station? station = viewModel
+                              .selectFirstFilteredStation();
 
                           if (station != null) {
                             _focusStation(station);
@@ -225,6 +225,8 @@ class _StationsMapContentState extends State<StationsMapContent> {
                           ),
                         ),
                       const Spacer(),
+                      const CurrentBookingPanel(),
+                      const SizedBox(height: 10),
                       // Keep the bottom indicator simple and always visible.
                       const StationBottomIndicator(),
                     ],

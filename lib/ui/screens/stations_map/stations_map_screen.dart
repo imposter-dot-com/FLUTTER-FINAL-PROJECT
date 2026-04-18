@@ -1,3 +1,6 @@
+import 'package:bike_renting_app/data/repositories/booking/booking_repository.dart';
+import 'package:bike_renting_app/main.dart';
+import 'package:bike_renting_app/ui/screens/current_booking/view_model/current_booking_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,10 +14,20 @@ class StationsMapScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Create the screen state object here and pass it to the map content.
-    return ChangeNotifierProvider(
-      create: (context) => StationsMapViewModel(
-        stationRepository: context.read<StationRepository>(),
-      ),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) => StationsMapViewModel(
+            stationRepository: context.read<StationRepository>(),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => CurrentBookingViewModel(
+            bookingRepository: context.read<BookingRepository>(),
+            userId: currentUserId,
+          ),
+        ),
+      ],
       child: const StationsMapContent(),
     );
   }
