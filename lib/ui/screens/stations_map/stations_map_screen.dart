@@ -13,7 +13,6 @@ class StationsMapScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Create the screen state object here and pass it to the map content.
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(

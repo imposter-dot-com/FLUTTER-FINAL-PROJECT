@@ -22,25 +22,191 @@ class StationsMapContent extends StatefulWidget {
 }
 
 class _StationsMapContentState extends State<StationsMapContent> {
-  // flutter_map uses its own controller to move the camera programmatically.
-  final MapController _mapController = MapController();
-
-  // Start the map near the current station area.
   static const LatLng _defaultCenter = LatLng(11.5564, 104.9282);
   static const double _defaultZoom = 13.5;
 
+  final MapController _mapController = MapController();
+  final TextEditingController _searchController = TextEditingController();
+  final Map<String, _CachedMarker> _markerCache = <String, _CachedMarker>{};
+
   void _focusStation(Station station) {
-    // When the user selects a station, jump the map closer to that station.
     _mapController.move(LatLng(station.lat, station.lng), 16);
   }
 
-  Widget _buildMarker(Station station) {
-    // Available stations use orange. Empty stations use gray.
+  Future<void> _handleStationTap(Station station) async {
+    final StationsMapViewModel viewModel = context.read<StationsMapViewModel>();
+    final CurrentBookingViewModel currentBookingVM = context
+        .read<CurrentBookingViewModel>();
+
+    viewModel.selectStation(station);
+    _focusStation(station);
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BookingScreen(
+          userId: currentUserId,
+          station: station,
+          slot: station.slots.first,
+          onBookingSuccess: (stationId, slotNumber) {
+            // Station slots update automatically via the Firebase stream
+            // in the new ViewModel — no manual local update needed.
+            // US6: refresh the current booking panel
+            currentBookingVM.onNewBookingCreated();
+          },
+        ),
+      ),
+    );
+  }
+
+  List<Marker> _buildMarkers(List<Station> stations) {
+    final Map<String, _CachedMarker> nextCache = <String, _CachedMarker>{};
+    final List<Marker> markers = <Marker>[];
+
+    for (final Station station in stations) {
+      final _CachedMarker? cachedMarker = _markerCache[station.id];
+      if (cachedMarker != null && cachedMarker.station == station) {
+        nextCache[station.id] = cachedMarker;
+        markers.add(cachedMarker.marker);
+        continue;
+      }
+
+      final Marker marker = Marker(
+        key: ValueKey<String>('station-marker-${station.id}'),
+        point: LatLng(station.lat, station.lng),
+        width: 62,
+        height: 70,
+        child: GestureDetector(
+          onTap: () => _handleStationTap(station),
+          child: _StationMarker(station: station),
+        ),
+      );
+
+      nextCache[station.id] = _CachedMarker(station: station, marker: marker);
+      markers.add(marker);
+    }
+
+    _markerCache
+      ..clear()
+      ..addAll(nextCache);
+
+    return List<Marker>.unmodifiable(markers);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<StationsMapViewModel, AsyncValueState>(
+      selector: (_, viewModel) => viewModel.stationsValue.state,
+      builder: (context, state, _) {
+        switch (state) {
+          case AsyncValueState.loading:
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          case AsyncValueState.error:
+            return const Scaffold(body: _StationsErrorView());
+          case AsyncValueState.success:
+            return Scaffold(
+              body: Stack(
+                children: [
+                  FlutterMap(
+                    mapController: _mapController,
+                    options: const MapOptions(
+                      initialCenter: _defaultCenter,
+                      initialZoom: _defaultZoom,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.bike_renting_app',
+                      ),
+                      Selector<StationsMapViewModel, List<Station>>(
+                        selector: (_, viewModel) => viewModel.filteredStations,
+                        builder: (context, stations, child) {
+                          return MarkerLayer(markers: _buildMarkers(stations));
+                        },
+                      ),
+                    ],
+                  ),
+                  SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          StationSearchBar(
+                            controller: _searchController,
+                            onChanged: context
+                                .read<StationsMapViewModel>()
+                                .updateSearchQuery,
+                            onSubmitted: () {
+                              final Station? station = context
+                                  .read<StationsMapViewModel>()
+                                  .selectFirstFilteredStation();
+                              if (station != null) {
+                                _searchController.value = TextEditingValue(
+                                  text: station.name,
+                                  selection: TextSelection.collapsed(
+                                    offset: station.name.length,
+                                  ),
+                                );
+                                FocusScope.of(context).unfocus();
+                                _focusStation(station);
+                              }
+                            },
+                            onMenuTap: () {
+                              FocusScope.of(context).unfocus();
+                            },
+                          ),
+                          _SearchSuggestionsPanel(
+                            onStationSelected: (station) {
+                              _searchController.value = TextEditingValue(
+                                text: station.name,
+                                selection: TextSelection.collapsed(
+                                  offset: station.name.length,
+                                ),
+                              );
+                              context
+                                  .read<StationsMapViewModel>()
+                                  .selectSearchSuggestion(station);
+                              FocusScope.of(context).unfocus();
+                              _focusStation(station);
+                            },
+                          ),
+                          const Spacer(),
+                          // US6: persistent booking panel
+                          const CurrentBookingPanel(),
+                          const SizedBox(height: 10),
+                          const StationBottomIndicator(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+}
+
+// ── Station marker widget ───────────────────────────────────────────────────
+
+class _StationMarker extends StatelessWidget {
+  const _StationMarker({required this.station});
+
+  final Station station;
+
+  @override
+  Widget build(BuildContext context) {
     final bool hasBikes = station.availableBikesCount > 0;
     final Color pinColor = hasBikes
-        ? BikeAppColors.primary
-        : const Color(0xFF7F7F7F);
-    final Color numberColor = hasBikes
         ? BikeAppColors.primary
         : const Color(0xFF7F7F7F);
 
@@ -48,7 +214,6 @@ class _StationsMapContentState extends State<StationsMapContent> {
       clipBehavior: Clip.none,
       alignment: Alignment.topCenter,
       children: [
-        // The outer pin gives the location shape.
         Icon(Icons.location_pin, color: pinColor, size: 62),
         Positioned(
           top: 11,
@@ -56,7 +221,6 @@ class _StationsMapContentState extends State<StationsMapContent> {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              // The white badge makes the bike count easier to read.
               color: Colors.white,
               shape: BoxShape.circle,
               boxShadow: const [
@@ -72,7 +236,7 @@ class _StationsMapContentState extends State<StationsMapContent> {
               '${station.availableBikesCount}',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: numberColor,
+                color: pinColor,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 height: 1,
@@ -83,159 +247,232 @@ class _StationsMapContentState extends State<StationsMapContent> {
       ],
     );
   }
+}
 
-  List<Marker> _buildMarkers(
-    StationsMapViewModel viewModel,
-    List<Station> stations,
-  ) {
-    // Convert each station into one map marker.
-    return stations.map((station) {
-      return Marker(
-        point: LatLng(station.lat, station.lng),
-        width: 62,
-        height: 70,
-        child: GestureDetector(
-          onTap: () {
-            // Save the selected station and move the camera to it.
-            viewModel.selectStation(station);
-            _focusStation(station);
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => BookingScreen(
-                  userId: currentUserId,
-                  station: station,
-                  slot: station.slots.first,
-                  onBookingSuccess: (stationId, slotNumber) {
-                    viewModel.applyLocalBookingUpdate(
-                      stationId: stationId,
-                      slotNumber: slotNumber,
-                    );
-                    context
-                        .read<CurrentBookingViewModel>()
-                        .onNewBookingCreated();
-                  },
-                ),
-              ),
-            );
-          },
-          child: _buildMarker(station),
-        ),
-      );
-    }).toList();
-  }
+// ── Search suggestions panel ────────────────────────────────────────────────
+
+class _SearchSuggestionsPanel extends StatelessWidget {
+  const _SearchSuggestionsPanel({required this.onStationSelected});
+
+  final ValueChanged<Station> onStationSelected;
 
   @override
   Widget build(BuildContext context) {
-    final StationsMapViewModel viewModel = context
-        .watch<StationsMapViewModel>();
+    return Selector<
+      StationsMapViewModel,
+      ({bool showSuggestions, List<Station> suggestions})
+    >(
+      selector: (_, viewModel) => (
+        showSuggestions: viewModel.showSearchSuggestions,
+        suggestions: viewModel.searchSuggestions,
+      ),
+      builder: (context, searchState, child) {
+        if (!searchState.showSuggestions) {
+          return const SizedBox.shrink();
+        }
 
-    switch (viewModel.stationsValue.state) {
-      case AsyncValueState.loading:
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-
-      case AsyncValueState.error:
-        return Scaffold(
-          body: Center(
-            child: Text(
-              'Error: ${viewModel.stationsValue.error}',
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        );
-
-      case AsyncValueState.success:
-        // Only the filtered stations are shown on the map.
-        final List<Station> stations = viewModel.filteredStations;
-
-        return Scaffold(
-          body: Stack(
-            children: [
-              FlutterMap(
-                mapController: _mapController,
-                options: const MapOptions(
-                  // The first camera position shown when the map opens.
-                  initialCenter: _defaultCenter,
-                  initialZoom: _defaultZoom,
-                ),
-                children: [
-                  TileLayer(
-                    // OpenStreetMap tiles draw the base map.
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.bike_renting_app',
-                  ),
-                  MarkerLayer(
-                    // This layer draws the station pins on top of the map.
-                    markers: _buildMarkers(viewModel, stations),
-                  ),
-                ],
-              ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      StationSearchBar(
-                        controller: viewModel.searchController,
-                        onChanged: viewModel.updateSearchQuery,
-                        onSubmitted: () {
-                          // Search submit focuses the first visible result.
-                          final Station? station = viewModel
-                              .selectFirstFilteredStation();
-
-                          if (station != null) {
-                            _focusStation(station);
-                          }
-                        },
-                        onMenuTap: () {
-                          // Close the keyboard when the side button is pressed.
-                          FocusScope.of(context).unfocus();
-                        },
-                      ),
-                      if (viewModel.searchController.text.isNotEmpty)
-                        Container(
-                          margin: const EdgeInsets.only(top: 12),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: BikeAppColors.secondary,
-                            borderRadius: BorderRadius.circular(18),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x12000000),
-                                blurRadius: 12,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.place_outlined),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  // Show how many stations match the current search.
-                                  '${stations.length} station(s) found',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      const Spacer(),
-                      const CurrentBookingPanel(),
-                      const SizedBox(height: 10),
-                      // Keep the bottom indicator simple and always visible.
-                      const StationBottomIndicator(),
-                    ],
-                  ),
-                ),
+        return Container(
+          margin: const EdgeInsets.only(top: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x12000000),
+                blurRadius: 12,
+                offset: Offset(0, 4),
               ),
             ],
           ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: searchState.suggestions.isEmpty
+                ? const _EmptySearchSuggestions()
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (
+                        int index = 0;
+                        index < searchState.suggestions.length;
+                        index++
+                      )
+                        _SearchSuggestionTile(
+                          station: searchState.suggestions[index],
+                          showDivider:
+                              index != searchState.suggestions.length - 1,
+                          onTap: () =>
+                              onStationSelected(searchState.suggestions[index]),
+                        ),
+                    ],
+                  ),
+          ),
         );
-    }
+      },
+    );
   }
+}
+
+class _SearchSuggestionTile extends StatelessWidget {
+  const _SearchSuggestionTile({
+    required this.station,
+    required this.onTap,
+    required this.showDivider,
+  });
+
+  final Station station;
+  final VoidCallback onTap;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            border: showDivider
+                ? const Border(bottom: BorderSide(color: Color(0xFFF0F0F0)))
+                : null,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: BikeAppColors.primary.withAlpha(24),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.place_rounded,
+                  color: BikeAppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      station.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.pedal_bike_rounded,
+                          size: 16,
+                          color: station.availableBikesCount > 0
+                              ? BikeAppColors.primary
+                              : const Color(0xFF7F7F7F),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${station.availableBikesCount} bike(s) available',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.north_west_rounded,
+                color: Color(0xFF7F7F7F),
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptySearchSuggestions extends StatelessWidget {
+  const _EmptySearchSuggestions();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          const Icon(Icons.search_off_rounded, color: Color(0xFF7F7F7F)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'No stations match your search',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Error view ──────────────────────────────────────────────────────────────
+
+class _StationsErrorView extends StatelessWidget {
+  const _StationsErrorView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<StationsMapViewModel, ({String title, String message})>(
+      selector: (_, viewModel) =>
+          (title: viewModel.errorTitle, message: viewModel.errorMessage),
+      builder: (context, errorState, _) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.wifi_tethering_error_rounded,
+                  size: 56,
+                  color: BikeAppColors.primary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  errorState.title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  errorState.message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: context.read<StationsMapViewModel>().retry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Try again'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Marker cache helper ─────────────────────────────────────────────────────
+
+class _CachedMarker {
+  const _CachedMarker({required this.station, required this.marker});
+
+  final Station station;
+  final Marker marker;
 }

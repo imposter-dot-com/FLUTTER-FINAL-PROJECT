@@ -3,4 +3,6 @@ class FirebaseConstants {
 
   static const String databaseBaseUrl =
       'velo-final-project-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+  static const String databaseUrl = 'https://$databaseBaseUrl';
 }

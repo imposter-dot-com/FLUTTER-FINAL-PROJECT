@@ -1,18 +1,26 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../domain/models/Station/station.dart';
 import '../../dtos/station_dto.dart';
-import 'station_repository.dart';
 import '../../../remote/firebase_constants.dart';
+import 'station_repository.dart';
 
 class StationRepositoryFirebase implements StationRepository {
-  // Keep the last station list so the app does not refetch on every rebuild.
-  List<Station>? _cachedStations;
+  StationRepositoryFirebase({FirebaseDatabase? database})
+    : _providedDatabase = database;
 
-  // This endpoint returns the station list stored in Firebase.
+  static const String _stationsPath = 'stations';
+
+  final FirebaseDatabase? _providedDatabase;
+
+  List<Station>? _cachedStations;
+  Future<FirebaseDatabase?>? _databaseFuture;
+
   final Uri stationsUri = Uri.https(
     FirebaseConstants.databaseBaseUrl,
     '/stations.json',
@@ -20,27 +28,40 @@ class StationRepositoryFirebase implements StationRepository {
 
   @override
   Future<List<Station>> getAllStations() async {
-    // Reuse the last successful list if it is already available.
     if (_cachedStations != null) {
       return _cachedStations!;
     }
 
-    final List<Station> stations = await _fetchStations();
-    _cachedStations = stations;
-    return stations;
+    final FirebaseDatabase? database = await _getDatabase();
+    final List<Station> stations;
+
+    if (database == null) {
+      stations = await _fetchStationsFromRest();
+    } else {
+      final DataSnapshot snapshot = await database.ref(_stationsPath).get();
+      stations = _parseStationsValue(snapshot.value);
+    }
+
+    return _cacheStations(stations);
   }
 
   @override
   Stream<List<Station>> watchStations() async* {
-    // Send data immediately so the map can render right away.
-    yield await getAllStations();
+    final FirebaseDatabase? database = await _getDatabase();
 
-    // Poll again every few seconds so bike availability stays current.
-    yield* Stream.periodic(const Duration(seconds: 15)).asyncMap((_) async {
-      final List<Station> stations = await _fetchStations();
-      _cachedStations = stations;
-      return stations;
-    });
+    if (database == null) {
+      // Without Firebase app setup, fall back to a single snapshot instead of polling.
+      yield await getAllStations();
+      return;
+    }
+
+    // Firebase Realtime Database is the live source for map station updates.
+    yield* database
+        .ref(_stationsPath)
+        .onValue
+        .map((event) => _parseStationsValue(event.snapshot.value))
+        .distinct(_stationsEqual)
+        .map(_cacheStations);
   }
 
   @override
@@ -53,33 +74,104 @@ class StationRepositoryFirebase implements StationRepository {
     );
   }
 
-  Future<List<Station>> _fetchStations() async {
-    // Fetch the latest station list from Firebase.
+  Future<FirebaseDatabase?> _getDatabase() {
+    if (_providedDatabase != null) {
+      return Future<FirebaseDatabase?>.value(_providedDatabase);
+    }
+
+    _databaseFuture ??= _createDatabaseOrNull();
+    return _databaseFuture!;
+  }
+
+  Future<FirebaseDatabase?> _createDatabaseOrNull() async {
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
+
+      return FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: FirebaseConstants.databaseUrl,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<Station> _cacheStations(List<Station> stations) {
+    _cachedStations = List<Station>.unmodifiable(stations);
+    return _cachedStations!;
+  }
+
+  Future<List<Station>> _fetchStationsFromRest() async {
     final http.Response response = await http.get(stationsUri);
 
     if (response.statusCode != 200) {
       throw Exception('Failed to load stations');
     }
 
-    if (response.body == 'null') {
-      return [];
+    return _parseStationsValue(json.decode(response.body));
+  }
+
+  List<Station> _parseStationsValue(Object? value) {
+    if (value == null) {
+      return const <Station>[];
     }
 
-    // Firebase returns a JSON array of station objects.
-    final List<dynamic> stationJson =
-        json.decode(response.body) as List<dynamic>;
-    final List<Station> stations = [];
+    // Support both list-shaped and keyed station payloads from the database.
+    if (value is List<dynamic>) {
+      return List<Station>.unmodifiable(_stationsFromList(value));
+    }
 
-    // Firebase stores stations in a JSON array, so use the raw array index as id.
+    if (value is Map<Object?, Object?>) {
+      final List<MapEntry<Object?, Object?>> entries = value.entries.toList()
+        ..sort((left, right) => '${left.key}'.compareTo('${right.key}'));
+      return List<Station>.unmodifiable(
+        entries
+            .where((entry) => entry.value != null)
+            .map(
+              (entry) => StationDTO.fromJson(
+                '${entry.key}',
+                Map<String, dynamic>.from(entry.value! as Map),
+              ),
+            )
+            .toList(growable: false),
+      );
+    }
+
+    throw const FormatException('Unexpected station payload');
+  }
+
+  List<Station> _stationsFromList(List<dynamic> stationJson) {
+    final List<Station> stations = <Station>[];
+
     for (int index = 0; index < stationJson.length; index++) {
+      final dynamic stationValue = stationJson[index];
+      if (stationValue == null) {
+        continue;
+      }
+
       stations.add(
         StationDTO.fromJson(
           '$index',
-          Map<String, dynamic>.from(stationJson[index] as Map),
+          Map<String, dynamic>.from(stationValue as Map),
         ),
       );
     }
 
     return stations;
   }
+}
+
+bool _stationsEqual(List<Station> left, List<Station> right) {
+  if (identical(left, right)) return true;
+  if (left.length != right.length) return false;
+
+  for (int index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+
+  return true;
 }
