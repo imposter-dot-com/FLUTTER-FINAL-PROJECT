@@ -1,5 +1,7 @@
 import 'package:bike_renting_app/main.dart';
 import 'package:bike_renting_app/ui/screens/booking/booking_screen.dart';
+import 'package:bike_renting_app/ui/screens/current_booking/view_model/current_booking_view_model.dart';
+import 'package:bike_renting_app/ui/screens/current_booking/widgets/current_booking_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -23,10 +25,8 @@ class _StationsMapContentState extends State<StationsMapContent> {
   static const LatLng _defaultCenter = LatLng(11.5564, 104.9282);
   static const double _defaultZoom = 13.5;
 
-  // Used for search focus and marker taps that should move the visible map.
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
-  // Reuse marker widgets when station data has not changed.
   final Map<String, _CachedMarker> _markerCache = <String, _CachedMarker>{};
 
   void _focusStation(Station station) {
@@ -35,6 +35,9 @@ class _StationsMapContentState extends State<StationsMapContent> {
 
   Future<void> _handleStationTap(Station station) async {
     final StationsMapViewModel viewModel = context.read<StationsMapViewModel>();
+    final CurrentBookingViewModel currentBookingVM = context
+        .read<CurrentBookingViewModel>();
+
     viewModel.selectStation(station);
     _focusStation(station);
 
@@ -44,6 +47,12 @@ class _StationsMapContentState extends State<StationsMapContent> {
           userId: currentUserId,
           station: station,
           slot: station.slots.first,
+          onBookingSuccess: (stationId, slotNumber) {
+            // Station slots update automatically via the Firebase stream
+            // in the new ViewModel — no manual local update needed.
+            // US6: refresh the current booking panel
+            currentBookingVM.onNewBookingCreated();
+          },
         ),
       ),
     );
@@ -99,7 +108,6 @@ class _StationsMapContentState extends State<StationsMapContent> {
             return Scaffold(
               body: Stack(
                 children: [
-                  // Base map layer: OSM tiles plus station markers from the view model.
                   FlutterMap(
                     mapController: _mapController,
                     options: const MapOptions(
@@ -112,7 +120,6 @@ class _StationsMapContentState extends State<StationsMapContent> {
                             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'com.example.bike_renting_app',
                       ),
-                      // Only stations that match the current search query stay visible.
                       Selector<StationsMapViewModel, List<Station>>(
                         selector: (_, viewModel) => viewModel.filteredStations,
                         builder: (context, stations, child) {
@@ -126,7 +133,6 @@ class _StationsMapContentState extends State<StationsMapContent> {
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          // Search updates the filtered station list and can recenter the map.
                           StationSearchBar(
                             controller: _searchController,
                             onChanged: context
@@ -136,7 +142,6 @@ class _StationsMapContentState extends State<StationsMapContent> {
                               final Station? station = context
                                   .read<StationsMapViewModel>()
                                   .selectFirstFilteredStation();
-
                               if (station != null) {
                                 _searchController.value = TextEditingValue(
                                   text: station.name,
@@ -168,6 +173,9 @@ class _StationsMapContentState extends State<StationsMapContent> {
                             },
                           ),
                           const Spacer(),
+                          // US6: persistent booking panel
+                          const CurrentBookingPanel(),
+                          const SizedBox(height: 10),
                           const StationBottomIndicator(),
                         ],
                       ),
@@ -188,6 +196,8 @@ class _StationsMapContentState extends State<StationsMapContent> {
   }
 }
 
+// ── Station marker widget ───────────────────────────────────────────────────
+
 class _StationMarker extends StatelessWidget {
   const _StationMarker({required this.station});
 
@@ -195,8 +205,7 @@ class _StationMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Marker color and count both come from the station's computed bike availability.
-    final bool hasBikes = station.hasBikes;
+    final bool hasBikes = station.availableBikesCount > 0;
     final Color pinColor = hasBikes
         ? BikeAppColors.primary
         : const Color(0xFF7F7F7F);
@@ -239,6 +248,8 @@ class _StationMarker extends StatelessWidget {
     );
   }
 }
+
+// ── Search suggestions panel ────────────────────────────────────────────────
 
 class _SearchSuggestionsPanel extends StatelessWidget {
   const _SearchSuggestionsPanel({required this.onStationSelected});
@@ -357,7 +368,7 @@ class _SearchSuggestionTile extends StatelessWidget {
                         Icon(
                           Icons.pedal_bike_rounded,
                           size: 16,
-                          color: station.hasBikes
+                          color: station.availableBikesCount > 0
                               ? BikeAppColors.primary
                               : const Color(0xFF7F7F7F),
                         ),
@@ -408,6 +419,8 @@ class _EmptySearchSuggestions extends StatelessWidget {
   }
 }
 
+// ── Error view ──────────────────────────────────────────────────────────────
+
 class _StationsErrorView extends StatelessWidget {
   const _StationsErrorView();
 
@@ -454,6 +467,8 @@ class _StationsErrorView extends StatelessWidget {
     );
   }
 }
+
+// ── Marker cache helper ─────────────────────────────────────────────────────
 
 class _CachedMarker {
   const _CachedMarker({required this.station, required this.marker});
