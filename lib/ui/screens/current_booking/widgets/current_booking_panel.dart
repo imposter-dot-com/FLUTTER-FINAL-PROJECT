@@ -11,20 +11,22 @@ class CurrentBookingPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.watch<CurrentBookingViewModel>();
 
-    if (!vm.hasActiveBooking) return const SizedBox.shrink();
+    // if (!vm.hasActiveBooking) return const SizedBox.shrink();
 
-    final booking = vm.activeBooking!;
+    final booking = vm.activeBooking;
 
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ChangeNotifierProvider.value(
-              value: vm,
-              child: const CurrentBookingScreen(),
+        if (booking != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ChangeNotifierProvider.value(
+                value: vm,
+                child: const CurrentBookingScreen(),
+              ),
             ),
-          ),
-        );
+          );
+        }
       },
 
       child: Container(
@@ -72,7 +74,7 @@ class CurrentBookingPanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    booking.stationName,
+                    booking != null ? booking.stationName : 'No active booking',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 15,
@@ -81,13 +83,14 @@ class CurrentBookingPanel extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
-                    'Slot #${booking.slotNumber}',
-                    style: TextStyle(
-                      color: Colors.white.withAlpha(200),
-                      fontSize: 12,
+                  if (booking != null)
+                    Text(
+                      'Slot #${booking.slotNumber}',
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(200),
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

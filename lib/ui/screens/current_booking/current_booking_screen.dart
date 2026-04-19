@@ -32,7 +32,7 @@ class _CurrentBookingContent extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Crrent Booking'),
+        title: const Text('Current Booking'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
